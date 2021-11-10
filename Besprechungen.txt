@@ -52,3 +52,4 @@ entsteht und keine ineffiziente Umwandlung (Energie in H2 -> Wirkungsgrad 18%)
 in zu hohem Maß durchgeführt werden muss
 
 Christiane recherchiert zu Energieerzeugung und realistischen Daten
+Kevin und Stephan schauen, dass die Sensoren mit Code ansteuerbar sind.
