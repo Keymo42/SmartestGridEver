@@ -53,3 +53,9 @@ in zu hohem Maß durchgeführt werden muss
 
 Christiane recherchiert zu Energieerzeugung und realistischen Daten
 Kevin und Stephan schauen, dass die Sensoren mit Code ansteuerbar sind.
+
+11.11.2021
+- tageszeiten in Kevins Version : feste Konstanten (ist gut! Sonnenstand IST eine Konstante)
+- ggf den Random-Abweichungswert später erst einfügen und vom Wetter abhängig machen
+-> Blizzard macht -80% ; Sonnenschein macht +5 usw
+- Bestimmte Wetterbedingungen sind auf eine bestimmte Prozentzahl wahrscheinlich (kann man Statistiken bedienen)
