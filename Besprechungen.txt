@@ -86,3 +86,7 @@ Festlegung von Sensoren
   
 Ansonsten : realistische Metadaten aus vergangenen Jahren heranziehen?
 - ist nicht wichtig und nicht dringlich!
+
+Kevin : weiter Arbeiten an Code; Einbinden von SQL in Python; Überlegungen zu gUI
+Stephan : MySQL auf Raspberry Pi realisieren
+Damien : moralische Luftunterstützung
