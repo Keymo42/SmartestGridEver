@@ -59,3 +59,30 @@ Kevin und Stephan schauen, dass die Sensoren mit Code ansteuerbar sind.
 - ggf den Random-Abweichungswert später erst einfügen und vom Wetter abhängig machen
 -> Blizzard macht -80% ; Sonnenschein macht +5 usw
 - Bestimmte Wetterbedingungen sind auf eine bestimmte Prozentzahl wahrscheinlich (kann man Statistiken bedienen)
+
+12.11.2021
+Konzeptüberarbeitung
+Festlegung von Sensoren
+- 3x LED für zentralen Pi
+  - Grün : über 30%
+  - gelb : unter 30%
+  - rot : unter 10%
+- gelbe LEDs als Straßenlaternen
+  - werden gesteuert über Lichtsensor
+  - wenn es dunkel ist und Energie über 50% : LED gelb an
+  - das heißt : gelbe LEDs gehen im besten Fall an, wenn Lichtsensor Dunkelheit sieht
+- Häuserblock : Not-Aus-Button und Potentiometer
+  - damit kann der Strom abgestellt werden
+  - Potentiometer : mit diesem kann der Stromverbrauch von Faktor 0,1 bis 3,0 hochgestellt werden
+- Krankenhaus : 
+  - LED ... ^^
+  - ggf Lichtsensor und Solarzellen (aber Stephan Einwand : Energiegewinnungskonzept dann unsauber? weil zwei Konzepte)
+  - Potentiometer? Entweder Stromverbrauch oder für Hochskalieren der Effizienz Umwandlung Strom -> Gas
+    - Argumentation : Strom in Gas kann ja später mal effizienter werden
+    - daher sinnvoll für das Modell
+- Gaskraftwerk : Alarm Buzzer
+  - wenn es angeht, soll es Krach machen
+  - im Prinzip Teil des Herzstück Pis
+  
+Ansonsten : realistische Metadaten aus vergangenen Jahren heranziehen?
+- ist nicht wichtig und nicht dringlich!
