@@ -18,7 +18,7 @@ class Helper:
         return temp
 
 
-    def useEnergy(sensor_values: List) -> float:
+    def useEnergy(self, sensor_values: list) -> dict:
         sum = 0
         for value in sensor_values:
             sum += value.get('energy')
