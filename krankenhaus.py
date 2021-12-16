@@ -5,14 +5,18 @@ import json
 import datetime
 # import pitop
 
-from random import randrange
+from helper import Helper
 
 
 class Krankenhaus:
     def __init__(self) -> None:
         self.define_variables()
 
-        sensor_thread = threading.Thread(target=self.listen_for_sensors)
+        self.found_server = False
+        while self.found_server is False:
+            self.get_server_ip()
+
+        sensor_thread = threading.Thread(target=self.listen_for_message)
         sensor_thread.daemon = True
         sensor_thread.start()
 
@@ -25,27 +29,31 @@ class Krankenhaus:
 
     def define_variables(self):
         self.uhrzeit = datetime.datetime(2069, 1, 1)
-        self.effizienzen = [0, 0, 0, 0,
-                            0, 0, 0, 0.3,
-                            0.4, 0.5, 0.6, 0.7,
-                            0.8, 0.7, 0.6, 0.5,
-                            0.4, 0.3, 0.2, 0,
-                            0, 0, 0, 0]  # Faktoren für Effizienzberechnung
-
+        self.kiloWattPeakSolar = 50  # kW/h
+        self.powerUsage = 50 # kW/h
         # Define Sensors and Actors
         self.temp_raw_data = {}
         self.waiting = False
-        # self.led_red = pitop.LED('D0')
-        # self.led_yellow = pitop.LED('D1')
-        # self.led_green = pitop.LED('D2')
-        # self.extra_poweruse_switch = pitop.Button('D3')
-        # self.solar_cells = pitop.LightSensor('A1')
-        # self.potentiometer = pitop.Potentiometer('A0')
 
-        UDP_IP = "127.0.0.1"
-        UDP_PORT = 8084
+
+        # self.lighsensor = pitop.Lightsensor('A0')
+        self.lightsensor = {
+            'reading': 550
+        }
+        # self.potentiometer = pitop.Potentiometer('A1')
+        self.potentiometer = {
+            'position': 550
+        }
+        # self.button = pitop.Button('D4')
+        self.button = {
+            'is_pressed': True
+        }
+
+        self.LOCAL_SERVER = ('0.0.0.0', 8084)
+        self.CENTRAL_SERVER = (None, 8082)
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.socket.bind((UDP_IP, UDP_PORT))
+        self.socket_out = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.socket.bind(self.LOCAL_SERVER)
 
     def day_loop(self) -> None:
         while True:
@@ -53,66 +61,62 @@ class Krankenhaus:
                 time.sleep(.01)
                 continue
 
+            self.solarPowerInfo = Helper.calculateSolarEnergy(self.uhrzeit.hour)
+            power_needed = self.pre_calc_needed_power()
             self.collect_sensor_data()
-            data = self.pre_calc_needed_power()
+
             payload = {
                 'sender': 'Krankenhaus',
-                'power_usage': data.get('poweruse_kwatt'),
-                'solarcells_efficiency': data.get('solarcells_efficiency'),
-                'potentiometer_efficiency': data.get('potentiometer_efficiency'),
-                'raw_data': {
-                    # 'led_red_on': self.led_red.is_lit,
-                    # 'led_yellow_on': self.led_yellow.is_lit,
-                    # 'led_green_on': self.led_green.is_lit,
-                    'extra_power_switch_on': self.temp_raw_data['extra_poweruse_switch'],
-                    'light_sensor': self.temp_raw_data['solar_cells'],
-                    'potentiometer': self.temp_raw_data['potentiometer']
-                }
+                'weather': self.solarPowerInfo['Wetter'],
+                'energy_production': self.solarPowerInfo['Effizienz'] * self.kiloWattPeakSolar,
+                'energy_usage': power_needed['poweruse_kwatt'],
+                'energy_netto': (self.solarPowerInfo['Effizienz'] * self.kiloWattPeakSolar) - power_needed['poweruse_kwatt'],
+                'raw_data': self.temp_raw_data
             }
+
             self.waiting = True
-            self.socket.sendto(bytes(json.dumps(payload), 'utf-8'), ("127.0.0.1", 8082))
+            self.socket_out.sendto(bytes(json.dumps(payload), 'utf-8'), self.CENTRAL_SERVER)
             self.uhrzeit = self.uhrzeit + datetime.timedelta(hours=1)
             time.sleep(1)
 
-    def listen_for_sensors(self):
+    def listen_for_message(self):
         while True:
-            data, adr = self.socket.recvfrom(4096)
-            data = data.decode('utf-8')
-            data = json.loads(data)
-            print(data)
+            self.socket.recvfrom(4096)
             self.waiting = False
             time.sleep(0.01)
 
     def collect_sensor_data(self) -> None:
-        test = randrange(0, 1, 1)
-        if test == 0:
-            self.temp_raw_data['extra_poweruse_switch'] = False
-        else:
-            self.temp_raw_data['extra_poweruse_switch'] = True
-        self.temp_raw_data['solar_cells'] = randrange(0, 999, 1)
-        self.temp_raw_data['potentiometer'] = randrange(0, 999, 1)
+        self.temp_raw_data = {
+            'lightsensor': self.lightsensor['reading'],
+            'potentiometer': self.potentiometer['position'],
+            'button': self.button['is_pressed']
+        }
 
     def pre_calc_needed_power(self) -> dict:
-        poweruse = 1.0
-        kw_per_h = 25
+        poweruse = 1.0  # Multiplikator
 
-        solar_cells_default = 555
-        poweruse = poweruse * (self.temp_raw_data['solar_cells'] / solar_cells_default)
-        print((self.temp_raw_data['solar_cells'] / solar_cells_default))
+        solar_cells_default = 450
+        poweruse = poweruse * (self.lightsensor['reading'] / solar_cells_default)
 
-        if self.temp_raw_data['extra_poweruse_switch']:
-            poweruse = poweruse * 1.5
+        poweruse_kwatt = poweruse * self.powerUsage
 
         potentiometer_default = 450
-        poweruse = poweruse * (self.temp_raw_data['potentiometer'] / potentiometer_default)
-        print((self.temp_raw_data['potentiometer'] / potentiometer_default))
-
-        poweruse_kwatt = poweruse * kw_per_h
+        poweruse_kwatt = poweruse_kwatt * (self.potentiometer['position'] / potentiometer_default)
 
         return {
             'poweruse_kwatt': poweruse_kwatt,
-            'solarcells_efficiency': (self.temp_raw_data['solar_cells'] / solar_cells_default),
-            'potentiometer_efficiency': (self.temp_raw_data['potentiometer'] / potentiometer_default)
+            'solarcells_efficiency': (self.lightsensor['reading'] / solar_cells_default),
+            'potentiometer_efficiency': (self.potentiometer['position'] / potentiometer_default)
         }
+
+    def get_server_ip(self):
+        time.sleep(0.1)
+        data, adr = self.socket.recvfrom(4096)
+        data = json.loads(data.decode('utf-8'))
+        print(data)
+        if data.get('sender') == 'Server':
+            self.CENTRAL_SERVER = adr
+            print(self.CENTRAL_SERVER)
+            self.found_server = True
 
 Krankenhaus()
