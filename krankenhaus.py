@@ -25,6 +25,8 @@ class Krankenhaus:
         while self.found_server is False:
             self.get_server_ip()
 
+        self.helper = Helper()
+
         sensor_thread = threading.Thread(target=self.listen_for_message)
         sensor_thread.daemon = True
         sensor_thread.start()
@@ -34,18 +36,18 @@ class Krankenhaus:
         dayloop_thread.start()
 
         while True:
-            time.sleep(1)
+            time.sleep(0.01)
 
     def define_variables(self):
-        self.helper = Helper()
         self.uhrzeit = datetime.datetime(2069, 1, 1)
         self.kiloWattPeakSolar = 10  # kW/h
-        self.powerUsage = 2000 # kW/h
+        self.powerUsage = 100 # kW/h
         # Define Sensors and Actors
         self.temp_raw_data = {}
         self.waiting = False
+        self.off_grid = False
 
-        self.counter = 1
+        self.loop_counter = 1
         self.energy_production_average = 0
         self.energy_usage_average = 0
         self.energy_netto_average = 0
@@ -71,95 +73,132 @@ class Krankenhaus:
             self.button = {
                 'is_pressed': True
             }
+
+            self.button_led = {
+                'is_lit': True
+            }
         else:
-            self.lightsensor = pitop.LightSensor('A0')
-            self.potentiometer = pitop.Potentiometer('A1')
-            self.button = pitop.Button('D4')
+            self.lightsensor = pitop.LightSensor('A0')      # Acts as a solar panel
+            self.potentiometer = pitop.Potentiometer('A1')  # Acts as a multiplier for Energy Usage
+            self.button = pitop.Button('D4')                # Takes it off the grid (Energy Usage is 0)
+            self.button_led = pitop.Button('D5')            # Lights up when Button is active
+
+            self.button.on_pressed = self.toggleGrid
+
+    def setUpPayload(self, solarPowerInfo: dict, energy_usage: float, energy: float) -> dict:
+        payload = {
+            'sender': 'Krankenhaus',
+            'weather': solarPowerInfo['Wetter'],
+            'energy_production': solarPowerInfo['Effizienz'] * energy,
+            'energy_usage': energy_usage,
+            'energy_netto': (solarPowerInfo['Effizienz'] * energy) - energy_usage,
+            'energy_production_average': self.energy_production_average,
+            'energy_usage_average': self.energy_usage_average,
+            'energy_netto_average': self.energy_netto_average,
+            'raw_data': self.temp_raw_data
+        }
+        return payload
 
     def day_loop(self) -> None:
         while True:
-            print(self.waiting)
+            print('Waiting: ', self.waiting)
             if self.waiting:
                 time.sleep(0.01)
                 continue
             self.waiting = True
 
-            self.solarPowerInfo = self.helper.calculateSolarEnergy(self.uhrzeit.hour)
-            power_needed = self.pre_calc_needed_power()
             self.collect_sensor_data()
 
-            self.energy_production_average = (self.energy_production_average * (self.counter - 1) + (self.solarPowerInfo['Effizienz'] * self.kiloWattPeakSolar)) / self.counter
-            self.energy_usage_average = (self.energy_usage_average * (self.counter - 1) + power_needed['poweruse_kwatt']) / self.counter
-            self.energy_netto_average = (self.energy_netto_average * (self.counter - 1) + ((self.solarPowerInfo['Effizienz'] * self.kiloWattPeakSolar) - power_needed['poweruse_kwatt'])) / self.counter
+            solarPowerInfo = self.helper.calculateSolarEnergy(self.uhrzeit.hour)
+            power_needed = self.pre_calc_needed_power()
+            energy = self.calc_power()
 
-            payload = {
-                'sender': 'Krankenhaus',
-                'weather': self.solarPowerInfo['Wetter'],
-                'energy_production': self.solarPowerInfo['Effizienz'] * self.kiloWattPeakSolar,
-                'energy_usage': power_needed['poweruse_kwatt'],
-                'energy_netto': (self.solarPowerInfo['Effizienz'] * self.kiloWattPeakSolar) - power_needed['poweruse_kwatt'],
-                'energy_production_average': self.energy_production_average,
-                'energy_usage_average': self.energy_usage_average,
-                'energy_netto_average': self.energy_netto_average,
-                'raw_data': self.temp_raw_data
-            }
+            self.energy_production_average = (self.energy_production_average + (solarPowerInfo['Effizienz'] * energy)) / self.loop_counter
+            self.energy_usage_average = (self.energy_usage_average + power_needed['poweruse_kwatt']) / self.loop_counter
+            self.energy_netto_average = (self.energy_netto_average + ((solarPowerInfo['Effizienz'] * energy) - power_needed['poweruse_kwatt'])) / self.loop_counter
+
+            payload = self.setUpPayload(solarPowerInfo, power_needed['poweruse_kwatt'], energy)
 
             self.socket_out.sendto(bytes(json.dumps(payload), 'utf-8'), self.CENTRAL_SERVER)
             self.uhrzeit = self.uhrzeit + datetime.timedelta(hours=1)
-            self.counter += 1
-            time.sleep(1)
+            self.loop_counter += 1
 
     def listen_for_message(self):
         while True:
-            self.socket.recvfrom(4096)
-            self.waiting = False
-            time.sleep(0.1)
+            data, adr = self.socket.recvfrom(4096)
+            if self.waiting and data is not None:
+                self.waiting = False
+            time.sleep(0.01)
 
     def collect_sensor_data(self) -> None:
         if self.LOCAL_TEST:
             self.temp_raw_data = {
                 'lightsensor': self.lightsensor['reading'],
                 'potentiometer': self.potentiometer['position'],
-                'button': self.button['is_pressed']
+                'button': self.button['is_pressed'],
+                'button_led': self.button_led['is_lit']
             }
         else:
             self.temp_raw_data = {
                 'lightsensor': self.lightsensor.reading,
                 'potentiometer': self.potentiometer.position,
-                'button': self.button.is_pressed
+                'button': self.button.is_pressed,
+                'button_led': self.button_led.is_lit
             }
 
     def pre_calc_needed_power(self) -> dict:
+        if self.off_grid:
+            return {
+                'poweruse_kwatt': 0,
+                'potentiometer_efficiency': 0
+            }
         if self.LOCAL_TEST:
-            lightsensor_value = self.lightsensor['reading']
             potentiometer_value = self.potentiometer['position']
         else:
-            lightsensor_value = self.lightsensor.reading
             potentiometer_value = self.potentiometer.position
         poweruse = 1.0  # Multiplikator
 
-        solar_cells_default = 450
-        poweruse = poweruse * (lightsensor_value / solar_cells_default)
+        potentiometer_default = 450
+        poweruse = poweruse * (potentiometer_value / potentiometer_default)
 
         poweruse_kwatt = poweruse * self.powerUsage
 
-        potentiometer_default = 450
-        poweruse_kwatt = poweruse_kwatt * (potentiometer_value / potentiometer_default)
-
         return {
             'poweruse_kwatt': poweruse_kwatt,
-            'solarcells_efficiency': (lightsensor_value / solar_cells_default),
             'potentiometer_efficiency': (potentiometer_value / potentiometer_default)
         }
 
     def get_server_ip(self):
-        time.sleep(0.1)
+        time.sleep(0.01)
         data, adr = self.socket.recvfrom(4096)
         data = json.loads(data.decode('utf-8'))
-        print(data)
         if data.get('sender') == 'Server':
             self.CENTRAL_SERVER = adr
             print(self.CENTRAL_SERVER)
             self.found_server = True
+
+    def calc_power(self):
+        if self.off_grid:
+            return 0
+
+        if self.LOCAL_TEST:
+            lightsensor_value = self.lightsensor['reading']
+        else:
+            lightsensor_value = self.lightsensor.reading
+
+        poweruse = 1
+
+        solar_cells_default = 450
+        solar_energy = (poweruse * (lightsensor_value / solar_cells_default)) * self.kiloWattPeakSolar
+
+        return solar_energy
+
+    def toggleGrid(self):
+        self.off_grid = not self.off_grid
+
+        self.button_led.off()
+        if self.off_grid:
+            self.button_led.on()
+
 
 Krankenhaus()
