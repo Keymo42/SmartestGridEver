@@ -26,8 +26,7 @@ app.get('/', (req, res) => {
 });
 
 app.post('/postData', (req, res) => {
-    console.log('Test23');
-    console.log(recent_data);
+    console.log('Post');
     let answer = true;
     if(recent_data === null) recent_data = req.body;
     else answer = false;
@@ -35,6 +34,7 @@ app.post('/postData', (req, res) => {
 });
 
 app.get('/getData', (req, res) => {
+    console.log('Get');
     const temp = recent_data;
     recent_data = null;
     return res.status(200).json(temp);

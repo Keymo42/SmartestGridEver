@@ -6,10 +6,10 @@ class Helper:
     def __init__(self) -> None:
         pass
 
-    def calculateBatteryPercentage(max: int, current: int) -> int:
+    def calculateBatteryPercentage(self, max: int, current: int) -> int:
          return int((current / max) * 100)
 
-    def calculateSolarEnergy(uhrzeit: int) -> dict:
+    def calculateSolarEnergy(self, uhrzeit: int) -> dict:
         Wetterwert = ["Sonne", "Regen", "Nieselregen", "Schnee", "Nebel", "Sturm", "Sonnensturm",
                            "Sonnenfinsternis"]
         wettervar = random.choices(Wetterwert, weights=(200, 70, 50, 30, 25, 25, 2, 1))[0]  # [0] w# ählt erstes Element aus der Liste, sonst krieg ich ne Liste ausgegeben

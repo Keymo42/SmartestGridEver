@@ -3,10 +3,42 @@
 <head>
     <meta charset="UTF-8">
     <title>SmartestGridEver</title>
+    <link rel="stylesheet" href="dashboard.css">
 </head>
 <body>
-<div>
-  <canvas id="myChart"></canvas>
+<div class="row">
+    <div class="package">
+        <h2 style="text-align: center;">Stromspeicher in %</h2>
+        <canvas class="line_chart" id="stromspeicher_chart"></canvas>
+        <h4 style="text-align: center;" id="stromspeicher_label">Speicher in kW: </h4>
+    </div>
+
+    <div class="package">
+        <h2 style="text-align: center;">Gesamt Energie</h2>
+        <canvas class="line_chart" id="general_energy_chart"></canvas>
+        <h4 style="text-align: center;" id="general_average_label">Netto Durchschnitt: </h4>
+    </div>
+
+    <div class="package">
+        <h2 style="text-align: center;">Zentral Energie</h2>
+        <canvas class="line_chart" id="central_energy_chart"></canvas>
+        <h4 style="text-align: center;" id="central_average_label">Netto Durchschnitt: </h4>
+        <h4 style="text-align: center;" id="central_wetter_label">Wetter: </h4>
+    </div>
+
+    <div class="package">
+        <h2 style="text-align: center;">Wohnblock Energie</h2>
+        <canvas class="line_chart" id="wohnblock_energy_chart"></canvas>
+        <h4 style="text-align: center;" id="wohnblock_average_label">Netto Durchschnitt: </h4>
+        <h4 style="text-align: center;" id="wohnblock_wetter_label">Wetter: </h4>
+    </div>
+
+    <div class="package">
+        <h2 style="text-align: center;">Krankenhaus Energie</h2>
+        <canvas class="line_chart" id="krankenhaus_energy_chart"></canvas>
+        <h4 style="text-align: center;" id="krankenhaus_average_label">Netto Durchschnitt: </h4>
+        <h4 style="text-align: center;" id="krankenhaus_wetter_label">Wetter: </h4>
+    </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>

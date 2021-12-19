@@ -1,0 +1,21 @@
+.row {
+    width: 100%;
+    height: 500px;
+    /*background: red;*/
+}
+.package {
+    width: 49%;
+    height: 500px;
+    float: left;
+    margin-bottom: 200px;
+}
+
+.line_chart {
+    /*width: calc(100% / 3) !important;*/
+    /*height: 300px !important;*/
+
+}
+
+.standard_chart {
+
+}
