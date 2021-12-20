@@ -5,6 +5,8 @@ import json
 import datetime
 import sys
 import requests
+import pitop
+import mysql.connector
 
 from helper import Helper
 from Gaskraftwerk import Gaskraftwerk
@@ -16,19 +18,15 @@ class CentralPy:
         if '--test' in sys.argv:
             self.LOCAL_TEST = True
 
-        if self.LOCAL_TEST:
-            import mysql.connector
-        else:
-            import pitop
 
-        if not self.LOCAL_TEST:
+        if self.LOCAL_TEST:
             print('Not connecting to Database')
         else:
             self.database = mysql.connector.connect(
                host="localhost",
                user="root",
-               password="bmxk2000",
-               database="smartgriddata"
+               password="smartgrid",
+               database="smartgrid_data"
             )
             self.db = self.database.cursor()
             self.db.execute('truncate wohnblock_raw_data;')
@@ -38,16 +36,15 @@ class CentralPy:
             self.db.execute('truncate central_data;')
             self.db.execute('truncate wohnblock_data;')
             self.db.execute('truncate krankenhaus_data;')
-            print(self.db.fetchall())
 
         self.helper = Helper()
         self.gasKraftwerk = Gaskraftwerk()
 
         self.define_variables()
 
-        sensor_thread = threading.Thread(target=self.listen_for_data)
-        sensor_thread.daemon = True
-        sensor_thread.start()
+        #sensor_thread = threading.Thread(target=self.listen_for_data)
+        #sensor_thread.daemon = True
+        #sensor_thread.start()
 
         sensor_thread = threading.Thread(target=self.emergencyBuzzer)
         sensor_thread.daemon = True
@@ -76,7 +73,7 @@ class CentralPy:
         self.kiloWattPeakSolar = 10 #kW/h
         self.benutzeGas = False
         self.produceGas = False
-        self.usage = 500 #kW/h
+        self.usage = 100 #kW/h
         self.blockCoal = False
 
         self.loop_counter = 1
@@ -151,9 +148,9 @@ class CentralPy:
             self.potentiometer = pitop.Potentiometer('A1')  # Used a multiplier for Energy Usage
             self.buzzer = pitop.Buzzer('D3')                # Beeps when battery below 30%
             self.button = pitop.Button('D4')                # Turns off the coal generator
-            self.button_led = pitop.Button('D5')            # Lights up when Button is active
+            self.button_led = pitop.LED('D5')            # Lights up when Button is active
 
-            self.button.on_pressed = self.toggleCoalUsage
+            self.button.when_pressed = self.toggleCoalUsage
 
     def sendDataToServer(self):
         move_on = False
@@ -240,9 +237,18 @@ class CentralPy:
         while True:
             print('Krankenhaus:', self.waiting_krankenhaus)
             print('Wohnblock:', self.waiting_wohnblock)
-            if self.waiting_wohnblock or self.waiting_krankenhaus:
+            while self.waiting_wohnblock or self.waiting_krankenhaus:
                 time.sleep(0.01)
-                continue
+                data, adr = self.socket.recvfrom(4096)
+                data = data.decode('utf-8')
+                data = json.loads(data)
+
+                if self.waiting_wohnblock and data['sender'] == 'Wohnblock':
+                    self.waiting_wohnblock = False
+                    self.wohnblock_data = data
+                elif self.waiting_krankenhaus and data['sender'] == 'Krankenhaus':
+                    self.waiting_krankenhaus = False
+                    self.krankenhaus_data = data
 
             self.waiting_wohnblock = True
             self.waiting_krankenhaus = True
@@ -304,7 +310,7 @@ class CentralPy:
                 self.setBatteryLEDStatus()
 
             self.sendDataToServer()
-            if not self.LOCAL_TEST:
+            if self.LOCAL_TEST:
                 print('Not saving Data')
             else:
                 self.saveRawSensorData(self.wohnblock_data, self.krankenhaus_data)

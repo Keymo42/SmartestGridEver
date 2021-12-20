@@ -5,6 +5,7 @@ import json
 import datetime
 import sys
 from helper import Helper
+import pitop
 
 
 class WohnBlock:
@@ -15,8 +16,6 @@ class WohnBlock:
 
         if self.LOCAL_TEST:
             print('Not importing pitop')
-        else:
-            import pitop
 
         self.define_variables()
 
@@ -88,13 +87,13 @@ class WohnBlock:
             }
         else:
             self.led_red = pitop.LED('D0')                  # Lights up when Wohnblock doesnt have power
-            self.led_green = pitop.LED('D2')                # Lights up when Wohnblock does have power
+            self.led_green = pitop.LED('D1')                # Lights up when Wohnblock does have power
             self.lightsensor = pitop.LightSensor('A0')      # Acts as a solar panel
             self.potentiometer = pitop.Potentiometer('A1')  # Multiplier for energy usage
-            self.button = pitop.Button('D4')                # Takes it off the grid
-            self.button_led = pitop.Button('D5')            # Lights up when Button is active
+            self.button = pitop.Button('D2')                # Takes it off the grid
+            self.button_led = pitop.LED('D3')            # Lights up when Button is active
 
-            self.button.on_pressed = self.toggleGrid
+            self.button.when_pressed = self.toggleGrid
 
     def setUpPayload(self, solarPowerInfo: dict, energy_usage: float, energy: float):
         payload = {
@@ -113,9 +112,17 @@ class WohnBlock:
     def day_loop(self) -> None:
         while True:
             print('Waiting: ', self.waiting)
-            if self.waiting:
+            while self.waiting:
+                data, adr = self.socket.recvfrom(4096)
+                data = data.decode('utf-8')
+                data = json.loads(data)
+
+                if not self.LOCAL_TEST:
+                    self.setBatteryLEDStatus(data['enough_energy'])
+
+                if self.waiting and data is not None:
+                    self.waiting = False
                 time.sleep(0.01)
-                continue
             self.waiting = True
 
             self.collect_sensor_data()

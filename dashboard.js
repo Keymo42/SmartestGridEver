@@ -36,8 +36,8 @@ const updateSpeicher = (graph, time, data) => {
 }
 
 let loop = async () => {
-    // const url = new URL('http://172.16.221.2:6969/getData');
-    const url = new URL('http://127.0.0.1:6969/getData')
+     const url = new URL('http://172.16.221.2:6969/getData');
+    //const url = new URL('http://127.0.0.1:6969/getData')
     let res = await fetch(url);
     res = await res.json();
     if(res === null) return;
@@ -247,4 +247,4 @@ const krankenhaus_energy_chart = new Chart(
     }
 );
 
-setInterval(loop, 1000);
+setInterval(loop, 100);
