@@ -66,14 +66,14 @@ class CentralPy:
         self.wohnblock_data = None
         self.krankenhaus_data = None
 
-        self.stromspeichermax = 10000 #kW/h
-        self.stromspeicher = 10000 #kw/h
+        self.stromspeichermax = 300 #kWh
+        self.stromspeicher = 250 #kwh
         self.stromspeicherProzent = self.helper.calculateBatteryPercentage(self.stromspeichermax, self.stromspeicher)
-        self.kiloWattPeak = 50 #kw/h
-        self.kiloWattPeakSolar = 10 #kW/h
+        self.kiloWattPeak = 50 #kwh
+        self.kiloWattPeakSolar = 4.566 #kW/h
         self.benutzeGas = False
         self.produceGas = False
-        self.usage = 100 #kW/h
+        self.usage = 2 #kWh
         self.blockCoal = False
 
         self.loop_counter = 1

@@ -36,10 +36,11 @@ class WohnBlock:
         while True:
             time.sleep(0.01)
 
+
     def define_variables(self):
         self.uhrzeit = datetime.datetime(2069, 1, 1)
-        self.kiloWattPeakSolar = 10  # kW/h
-        self.powerUsage = 100  # kW/h
+        self.kiloWattPeakSolar = 45.66  # kWh
+        self.powerUsage = 13.7  # kWh
 
         self.loop_counter = 1
         self.energy_production_average = 0
@@ -112,17 +113,8 @@ class WohnBlock:
     def day_loop(self) -> None:
         while True:
             print('Waiting: ', self.waiting)
-            while self.waiting:
-                data, adr = self.socket.recvfrom(4096)
-                data = data.decode('utf-8')
-                data = json.loads(data)
-
-                if not self.LOCAL_TEST:
-                    self.setBatteryLEDStatus(data['enough_energy'])
-
-                if self.waiting and data is not None:
-                    self.waiting = False
-                time.sleep(0.01)
+            if self.waiting:
+                continue
             self.waiting = True
 
             self.collect_sensor_data()

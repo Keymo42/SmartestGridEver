@@ -39,8 +39,8 @@ class Krankenhaus:
 
     def define_variables(self):
         self.uhrzeit = datetime.datetime(2069, 1, 1)
-        self.kiloWattPeakSolar = 10  # kW/h
-        self.powerUsage = 100 # kW/h
+        self.kiloWattPeakSolar = 45.66  # kWh
+        self.powerUsage = 13.7 # kWh
         # Define Sensors and Actors
         self.temp_raw_data = {}
         self.waiting = False

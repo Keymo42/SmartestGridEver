@@ -247,4 +247,4 @@ const krankenhaus_energy_chart = new Chart(
     }
 );
 
-setInterval(loop, 100);
+setInterval(loop, 100ü);
