@@ -4,53 +4,73 @@ import random
 
 class Helper:
     def __init__(self) -> None:
+        self.hours_since_weather_change = 0
+        self.last_efficiency = 0
+        self.last_weather = ''
         pass
 
     def calculateBatteryPercentage(self, max: int, current: int) -> int:
          return int((current / max) * 100)
 
     def calculateSolarEnergy(self, uhrzeit: int) -> dict:
+        if self.hours_since_weather_change < 3:
+            self.hours_since_weather_change += 1
+            return {
+                'Wetter': self.last_weather,
+                'Effizienz': self.last_efficiency
+            }
+
+        self.hours_since_weather_change = 0
         Wetterwert = ["Sonne", "Regen", "Nieselregen", "Schnee", "Nebel", "Sturm", "Sonnensturm",
                            "Sonnenfinsternis"]
         wettervar = random.choices(Wetterwert, weights=(200, 70, 50, 30, 25, 25, 2, 1))[0]  # [0] w# ählt erstes Element aus der Liste, sonst krieg ich ne Liste ausgegeben
-        effizienz = random.randint(80, 100)
+        effizienz = 1
         if wettervar == "Sonne":
-            effizienz = random.randint(80, 100)
             if uhrzeit <= 6 or uhrzeit >= 20:
                 wettervar = "Mond"
-                effizienz = (effizienz * 0.2)
+                effizienz = (effizienz * 0.3)
+            else:
+                effizienz = 1.5
         elif wettervar == "Nebel":
-            effizienz = random.randint(30, 50)
             if uhrzeit <= 6 or uhrzeit >= 20:
-                effizienz = (effizienz * 0.2)
+                effizienz = (effizienz * 0.3)
+            else:
+                effizienz = 0.6
         elif wettervar == "Regen":
-            effizienz = random.randint(30, 80)
             if uhrzeit <= 6 or uhrzeit >= 20:
-                effizienz = (effizienz * 0.2)
+                effizienz = (effizienz * 0.3)
+            else:
+                effizienz = 0.5
         elif wettervar == "Nieselregen":
-            effizienz = random.randint(30, 70)
             if uhrzeit <= 6 or uhrzeit >= 20:
-                effizienz = (effizienz * 0.2)
+                effizienz = (effizienz * 0.3)
+            else:
+                effizienz = 0.6
         elif wettervar == "Schnee":
-            effizienz = random.randint(10, 30)
             if uhrzeit <= 6 or uhrzeit >= 20:
-                effizienz = (effizienz * 0.2)
+                effizienz = (effizienz * 0.3)
+            else:
+                effizienz = 0.4
         elif wettervar == "Sturm":
-            effizienz = random.randint(20, 50)
             if uhrzeit <= 6 or uhrzeit >= 20:
-                effizienz = (effizienz * 0.2)
+                effizienz = (effizienz * 0.3)
+            else:
+                effizienz = 0.4
         elif wettervar == "Sonnensturm":
-            effizienz = random.randint(50, 100)
             if uhrzeit <= 6 or uhrzeit >= 20:
-                effizienz = (effizienz * 0.2)
+                effizienz = (effizienz * 0.3)
+            else:
+                effizienz = 2
         elif wettervar == "Sonnenfinsternis":
-            effizienz = random.randint(1, 5)
-            if uhrzeit <= 6 or uhrzeit >= 20:
-                effizienz = (effizienz * 0.2)
+            effizienz = 0
         else:
             effizienz = 0
 
+        self.last_efficiency = effizienz
+        self.last_weather = wettervar
+        self.hours_since_weather_change += 1
 
+        print('Effizienz: ', effizienz)
         return {
             'Wetter': wettervar,
             'Effizienz': effizienz

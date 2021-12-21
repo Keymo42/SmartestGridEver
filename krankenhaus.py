@@ -4,6 +4,7 @@ import socket
 import json
 import datetime
 import sys
+import random
 import pitop
 
 from helper import Helper
@@ -20,15 +21,7 @@ class Krankenhaus:
 
         self.define_variables()
 
-        self.found_server = False
-        while self.found_server is False:
-            self.get_server_ip()
-
         self.helper = Helper()
-
-        sensor_thread = threading.Thread(target=self.listen_for_message)
-        sensor_thread.daemon = True
-        sensor_thread.start()
 
         dayloop_thread = threading.Thread(target=self.day_loop)
         dayloop_thread.daemon = True
@@ -40,7 +33,9 @@ class Krankenhaus:
     def define_variables(self):
         self.uhrzeit = datetime.datetime(2069, 1, 1)
         self.kiloWattPeakSolar = 45.66  # kWh
-        self.powerUsage = 13.7 # kWh
+        # self.powerUsage = 13.7 # kWh
+        self.usage_actual = 0
+        self.powerUsage = 26  # kWh
         # Define Sensors and Actors
         self.temp_raw_data = {}
         self.waiting = False
@@ -53,11 +48,13 @@ class Krankenhaus:
 
         self.setUpSensors()
 
-        self.LOCAL_SERVER = ('0.0.0.0', 8084)
-        self.CENTRAL_SERVER = (None, 8082)
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.socket_out = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.socket.bind(self.LOCAL_SERVER)
+        self.CENTRAL_SERVER = ('172.16.221.2', 8082)
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket.connect(self.CENTRAL_SERVER)
+
+        data_thread = threading.Thread(target=self.listen_for_data)
+        data_thread.daemon = True
+        data_thread.start()
 
     def setUpSensors(self):
         if self.LOCAL_TEST:
@@ -100,13 +97,14 @@ class Krankenhaus:
 
     def day_loop(self) -> None:
         while True:
-            print('Waiting: ', self.waiting)
+            # print('Waiting: ', self.waiting)
             while self.waiting:
-                data, adr = self.socket.recvfrom(4096)
-                if self.waiting and data is not None:
-                    self.waiting = False
-                time.sleep(0.01)
+                continue
             self.waiting = True
+
+            usage_multiplier = random.randint(5, 11)
+            usage_multiplier = usage_multiplier / 10
+            self.usage_actual = self.powerUsage * usage_multiplier
 
             self.collect_sensor_data()
 
@@ -115,21 +113,28 @@ class Krankenhaus:
             energy = self.calc_power()
 
             self.energy_production_average = (self.energy_production_average + (solarPowerInfo['Effizienz'] * energy)) / self.loop_counter
+            print('Production: ', self.energy_production_average, ' + ',
+                  (solarPowerInfo['Effizienz'] * energy), ' / ', self.loop_counter)
+            print('Average: ', self.energy_production_average)
             self.energy_usage_average = (self.energy_usage_average + power_needed['poweruse_kwatt']) / self.loop_counter
             self.energy_netto_average = (self.energy_netto_average + ((solarPowerInfo['Effizienz'] * energy) - power_needed['poweruse_kwatt'])) / self.loop_counter
 
-            payload = self.setUpPayload(solarPowerInfo, power_needed['poweruse_kwatt'], energy)
+            print('Netto: ', self.energy_netto_average, ' + ', ((solarPowerInfo['Effizienz'] * energy) - power_needed['poweruse_kwatt']), ' / ', self.loop_counter)
 
-            self.socket_out.sendto(bytes(json.dumps(payload), 'utf-8'), self.CENTRAL_SERVER)
+            payload = self.setUpPayload(solarPowerInfo, power_needed['poweruse_kwatt'], energy)
+            # print(payload)
+            self.socket.send(bytes(json.dumps(payload), 'utf-8'))
             self.uhrzeit = self.uhrzeit + datetime.timedelta(hours=1)
             self.loop_counter += 1
 
-    def listen_for_message(self):
+    def listen_for_data(self):
         while True:
-            data, adr = self.socket.recvfrom(4096)
+            time.sleep(0.01)
+            data = self.socket.recv(1024)
+            data = json.loads(data.decode('utf-8'))
+
             if self.waiting and data is not None:
                 self.waiting = False
-            time.sleep(0.01)
 
     def collect_sensor_data(self) -> None:
         if self.LOCAL_TEST:
@@ -162,21 +167,13 @@ class Krankenhaus:
         potentiometer_default = 450
         poweruse = poweruse * (potentiometer_value / potentiometer_default)
 
-        poweruse_kwatt = poweruse * self.powerUsage
+        poweruse_kwatt = poweruse * self.usage_actual
 
+        print(poweruse_kwatt)
         return {
             'poweruse_kwatt': poweruse_kwatt,
             'potentiometer_efficiency': (potentiometer_value / potentiometer_default)
         }
-
-    def get_server_ip(self):
-        time.sleep(0.01)
-        data, adr = self.socket.recvfrom(4096)
-        data = json.loads(data.decode('utf-8'))
-        if data.get('sender') == 'Server':
-            self.CENTRAL_SERVER = adr
-            print(self.CENTRAL_SERVER)
-            self.found_server = True
 
     def calc_power(self):
         if self.off_grid:
@@ -189,7 +186,7 @@ class Krankenhaus:
 
         poweruse = 1
 
-        solar_cells_default = 450
+        solar_cells_default = 50
         solar_energy = (poweruse * (lightsensor_value / solar_cells_default)) * self.kiloWattPeakSolar
 
         return solar_energy

@@ -6,6 +6,7 @@ import datetime
 import sys
 import requests
 import pitop
+import random
 import mysql.connector
 
 from helper import Helper
@@ -42,13 +43,9 @@ class CentralPy:
 
         self.define_variables()
 
-        #sensor_thread = threading.Thread(target=self.listen_for_data)
-        #sensor_thread.daemon = True
-        #sensor_thread.start()
-
-        sensor_thread = threading.Thread(target=self.emergencyBuzzer)
-        sensor_thread.daemon = True
-        sensor_thread.start()
+        buzzer_thread = threading.Thread(target=self.emergencyBuzzer)
+        buzzer_thread.daemon = True
+        buzzer_thread.start()
 
         dayloop_thread = threading.Thread(target=self.day_loop)
         dayloop_thread.daemon = True
@@ -69,12 +66,15 @@ class CentralPy:
         self.stromspeichermax = 300 #kWh
         self.stromspeicher = 250 #kwh
         self.stromspeicherProzent = self.helper.calculateBatteryPercentage(self.stromspeichermax, self.stromspeicher)
-        self.kiloWattPeak = 50 #kwh
+        self.kiloWattPeak = 10 #kwh
         self.kiloWattPeakSolar = 4.566 #kW/h
         self.benutzeGas = False
         self.produceGas = False
-        self.usage = 2 #kWh
+        self.usage = 20 #kWh
+        self.usage_actual = 0
         self.blockCoal = False
+        self.usedGas = False
+        self.convertedGas = False
 
         self.loop_counter = 1
         self.energy_production_average = 0
@@ -86,26 +86,41 @@ class CentralPy:
 
         self.blockWohnblock = False
 
-        self.SERVER_URL = 'http://localhost:6969/postData'
-        self.CENTRAL_SERVER = ('0.0.0.0', 8082)
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.socket.bind(self.CENTRAL_SERVER)
-
         self.wohnblock_adr = ('172.16.220.249', 8083)
         self.krankenhaus_adr = ('172.16.213.214', 8084)
-
         if self.LOCAL_TEST:
-            self.wohnblock_adr = ('127.0.0.1', 8083)
-            self.krankenhaus_adr = ('127.0.0.1', 8084)
+            self.wohnblock_adr = ('192.168.2.42', 8083)
+            self.krankenhaus_adr = ('192.168.2.112', 8084)
 
-        self.socket.sendto(bytes(json.dumps({
-            'sender': 'Server'
-        }), 'utf-8'), self.wohnblock_adr)
+        self.SERVER_URL = 'http://localhost:6969/postData'
+        self.CENTRAL_SERVER = ('0.0.0.0', 8082)
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.socket.bind(self.CENTRAL_SERVER)
+        self.socket.listen()
 
-        self.socket.sendto(bytes(json.dumps({
-            'sender': 'Server'
-        }), 'utf-8'), self.krankenhaus_adr)
+        self.wohnblock_connection = None
+        self.krankenhaus_connection = None
+        while self.wohnblock_connection is None or self.krankenhaus_connection is None:
+            print('Awaiting Connection')
+            conn, addr = self.socket.accept()
+            if addr[0] == self.wohnblock_adr[0]:
+                self.wohnblock_connection = conn
+                print('Wohnblock connected')
+            elif addr[0] == self.krankenhaus_adr[0]:
+                self.krankenhaus_connection = conn
+                print('Krankenhaus connected')
+
+        wohnblock_thread = threading.Thread(target=self.listen_for_wohnblock_data)
+        wohnblock_thread.daemon = True
+
+        krankenhaus_thread = threading.Thread(target=self.listen_for_krankenhaus_data)
+        krankenhaus_thread.daemon = True
+
+        wohnblock_thread.start()
+        krankenhaus_thread.start()
+
+
 
     def setUpSensors(self):
         if self.LOCAL_TEST:
@@ -185,7 +200,7 @@ class CentralPy:
         self.payload['central']['coal_production'] = energy['coal_energy']
         self.payload['central']['energy_production'] = self.payload['central']['solar_production'] + \
                                                        self.payload['central']['coal_production']
-        self.payload['central']['energy_usage'] = self.usage
+        self.payload['central']['energy_usage'] = self.usage_actual
         self.payload['central']['energy_netto'] = self.payload['central']['energy_production'] - \
                                                   self.payload['central']['energy_usage']
         self.payload['central']['energy_production_average'] = self.energy_production_average
@@ -198,7 +213,8 @@ class CentralPy:
         self.payload['general']['energy_netto_average'] = self.general_energy_netto_average
 
     def useGridEnergy(self):
-        energy_after_krankenhaus = self.stromspeicher - self.krankenhaus_data['energy_netto']
+        energy_after_krankenhaus = self.stromspeicher + self.krankenhaus_data['energy_netto']
+        print(energy_after_krankenhaus)
         if energy_after_krankenhaus <= 0:
             self.krankenhaus_enough_energy = False
             self.stromspeicher += self.krankenhaus_data['energy_production']
@@ -212,7 +228,7 @@ class CentralPy:
         self.payload['general']['energy_usage'] += self.krankenhaus_data['energy_usage']
         self.payload['general']['energy_netto'] += self.krankenhaus_data['energy_netto']
 
-        energy_after_wohnblock = self.stromspeicher - self.wohnblock_data['energy_netto']
+        energy_after_wohnblock = self.stromspeicher + self.wohnblock_data['energy_netto']
         if energy_after_wohnblock < 0 or self.blockWohnblock:
             self.wohnblock_enough_energy = False
             self.stromspeicher += self.wohnblock_data['energy_production']
@@ -229,31 +245,31 @@ class CentralPy:
     def useGasEnergy(self):
         self.payload['GasEnergy'] = {}
         if self.benutzeGas:
-            gas = self.gasKraftwerk.use_gas()
+            print('Stromspeicher: ', self.stromspeicher)
+            needed_energy = (self.stromspeichermax * 0.25)
+            if self.stromspeicher < 0:
+                needed_energy += (-1 * self.stromspeicher)
+            else:
+                needed_energy = needed_energy - self.stromspeicher
+            print('Needed Energy: ', needed_energy)
+            gas = self.gasKraftwerk.use_gas(needed_energy)
             self.stromspeicher += gas['energy']
             self.payload['GasEnergy'] = gas
+            self.usedGas = True
 
     def day_loop(self):
         while True:
             print('Krankenhaus:', self.waiting_krankenhaus)
             print('Wohnblock:', self.waiting_wohnblock)
             while self.waiting_wohnblock or self.waiting_krankenhaus:
-                time.sleep(0.01)
-                data, adr = self.socket.recvfrom(4096)
-                data = data.decode('utf-8')
-                data = json.loads(data)
-
-                if self.waiting_wohnblock and data['sender'] == 'Wohnblock':
-                    self.waiting_wohnblock = False
-                    self.wohnblock_data = data
-                elif self.waiting_krankenhaus and data['sender'] == 'Krankenhaus':
-                    self.waiting_krankenhaus = False
-                    self.krankenhaus_data = data
+                continue
 
             self.waiting_wohnblock = True
             self.waiting_krankenhaus = True
             self.wohnblock_enough_energy = True
             self.krankenhaus_enough_energy = True
+            self.usedGas = False
+            self.convertedGas = False
 
             self.collect_sensor_data()
 
@@ -261,11 +277,14 @@ class CentralPy:
 
             solarPowerInfo = self.helper.calculateSolarEnergy(self.uhrzeit.hour)
             energy = self.calc_power()
+            usage_multiplier = random.randint(5, 11)
+            usage_multiplier = usage_multiplier / 10
+            self.usage_actual = self.usage * usage_multiplier
             self.energy_production_average = (self.energy_production_average + (
                         energy['coal_energy'] + (solarPowerInfo['Effizienz'] * energy['solar_energy']))) / self.loop_counter
-            self.energy_usage_average = (self.energy_usage_average + self.usage) / self.loop_counter
+            self.energy_usage_average = (self.energy_usage_average + self.usage_actual) / self.loop_counter
             self.energy_netto_average = (self.energy_netto_average + ((
-                        energy['coal_energy'] + (solarPowerInfo['Effizienz'] * energy['solar_energy'])) - self.usage)) / self.loop_counter
+                        energy['coal_energy'] + (solarPowerInfo['Effizienz'] * energy['solar_energy'])) - self.usage_actual)) / self.loop_counter
             self.general_energy_netto_average = (self.general_energy_netto_average + (self.energy_netto_average + self.krankenhaus_data['energy_netto'] + self.wohnblock_data['energy_netto'])) / self.loop_counter
 
             self.setUpPayload(solarPowerInfo, energy)
@@ -277,13 +296,16 @@ class CentralPy:
 
             if self.stromspeicherProzent < 10:
                 self.benutzeGas = True
-            elif self.benutzeGas and self.stromspeicherProzent >= 100:
+            elif self.benutzeGas and self.stromspeicherProzent >= 10:
                 self.benutzeGas = False
 
             self.useGasEnergy()
+            self.stromspeicherProzent = self.helper.calculateBatteryPercentage(self.stromspeichermax,
+                                                                               self.stromspeicher)
 
             if self.stromspeicherProzent >= 100:
-                self.gasKraftwerk.convertEnergyToGas(self.stromspeichermax - self.stromspeicher)
+                self.payload['GasEnergy'] = self.gasKraftwerk.convertEnergyToGas(self.stromspeicher - self.stromspeichermax)
+                self.convertedGas = True
                 self.stromspeicher = self.stromspeichermax
                 self.stromspeicherProzent = 100
 
@@ -295,19 +317,20 @@ class CentralPy:
             self.payload['general']['stromspeicher_prozent'] = self.stromspeicherProzent
             self.payload['general']['stromspeicher'] = self.stromspeicher
 
-
-            self.socket.sendto(bytes(json.dumps({
+            self.wohnblock_connection.send(bytes(json.dumps({
                 'enough_energy': self.wohnblock_enough_energy
-            }), 'utf-8'), self.wohnblock_adr)
-
-            self.socket.sendto(bytes(json.dumps({
+            }), 'utf-8'))
+            self.krankenhaus_connection.send(bytes(json.dumps({
                 'enough_energy': self.krankenhaus_enough_energy
-            }), 'utf-8'), self.krankenhaus_adr)
+            }), 'utf-8'))
 
             if self.LOCAL_TEST:
                 print('Not using LEDs')
             else:
                 self.setBatteryLEDStatus()
+
+            if not self.usedGas and not self.convertedGas:
+                self.payload['GasEnergy'] = self.gasKraftwerk.getData()
 
             self.sendDataToServer()
             if self.LOCAL_TEST:
@@ -316,7 +339,6 @@ class CentralPy:
                 self.saveRawSensorData(self.wohnblock_data, self.krankenhaus_data)
                 self.saveData(self.payload)
 
-            print(self.payload)
             print('Speicher ist: ', self.stromspeicherProzent, '%\n')
 
             if self.stromspeicher <= 0: #Batteriestand kann nicht negativ sein, sollte nie auftreten
@@ -326,19 +348,25 @@ class CentralPy:
             self.loop_counter += 1
             time.sleep(1)
 
-    def listen_for_data(self):
+    def listen_for_wohnblock_data(self):
         while True:
             time.sleep(0.01)
-            data, adr = self.socket.recvfrom(4096)
-            data = data.decode('utf-8')
-            data = json.loads(data)
+            data = self.wohnblock_connection.recv(1024)
+            data = json.loads(data.decode('utf-8'))
 
             if self.waiting_wohnblock and data['sender'] == 'Wohnblock':
-                self.waiting_wohnblock = False
                 self.wohnblock_data = data
-            elif self.waiting_krankenhaus and data['sender'] == 'Krankenhaus':
-                self.waiting_krankenhaus = False
+                self.waiting_wohnblock = False
+
+    def listen_for_krankenhaus_data(self):
+        while True:
+            time.sleep(0.01)
+            data = self.krankenhaus_connection.recv(1024)
+            data = json.loads(data.decode('utf-8'))
+
+            if self.waiting_krankenhaus and data['sender'] == 'Krankenhaus':
                 self.krankenhaus_data = data
+                self.waiting_krankenhaus = False
 
     def calc_power(self):
         if self.LOCAL_TEST:
@@ -353,7 +381,7 @@ class CentralPy:
         coal_energy = 0
         energy_sum = 0
 
-        solar_cells_default = 450
+        solar_cells_default = 50
         solar_energy = (poweruse * (lightsensor_value / solar_cells_default)) * self.kiloWattPeakSolar
         energy_sum += solar_energy
 
@@ -509,6 +537,9 @@ class CentralPy:
 
     def toggleCoalUsage(self):
         self.blockCoal = not self.blockCoal
+        self.button_led.off()
+        if self.blockCoal:
+            self.button_led.on()
 
 
 
