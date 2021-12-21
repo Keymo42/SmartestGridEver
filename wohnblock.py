@@ -35,7 +35,7 @@ class WohnBlock:
         self.kiloWattPeakSolar = 45.66  # kWh
         # self.powerUsage = 13.7  # kWh
         self.usage_actual = 0
-        self.powerUsage = 26  # kWh
+        self.powerUsage = 18  # kWh
 
         self.loop_counter = 1
         self.energy_production_average = 0
@@ -183,7 +183,6 @@ class WohnBlock:
 
         poweruse_kwatt = self.usage_actual * poweruse_rate
 
-        print(poweruse_kwatt)
         return {
             'poweruse_kwatt': poweruse_kwatt,
             'potentiometer_efficiency': (potentiometer_value / potentiometer_default)
@@ -202,7 +201,6 @@ class WohnBlock:
 
         solar_cells_default = 50
         solar_energy = (poweruse * (lightsensor_value / solar_cells_default)) * self.kiloWattPeakSolar
-        print(solar_energy)
 
         return solar_energy
 

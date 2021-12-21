@@ -162,8 +162,8 @@ class CentralPy:
             self.led_green = pitop.LED('D2')                # Lights up when battery above 80%
             self.potentiometer = pitop.Potentiometer('A1')  # Used a multiplier for Energy Usage
             self.buzzer = pitop.Buzzer('D3')                # Beeps when battery below 30%
-            self.button = pitop.Button('D4')                # Turns off the coal generator
-            self.button_led = pitop.LED('D5')            # Lights up when Button is active
+            self.button = pitop.Button('D5')                # Turns off the coal generator
+            self.button_led = pitop.LED('D4')            # Lights up when Button is active
 
             self.button.when_pressed = self.toggleCoalUsage
 
@@ -214,7 +214,6 @@ class CentralPy:
 
     def useGridEnergy(self):
         energy_after_krankenhaus = self.stromspeicher + self.krankenhaus_data['energy_netto']
-        print(energy_after_krankenhaus)
         if energy_after_krankenhaus <= 0:
             self.krankenhaus_enough_energy = False
             self.stromspeicher += self.krankenhaus_data['energy_production']
@@ -245,13 +244,11 @@ class CentralPy:
     def useGasEnergy(self):
         self.payload['GasEnergy'] = {}
         if self.benutzeGas:
-            print('Stromspeicher: ', self.stromspeicher)
             needed_energy = (self.stromspeichermax * 0.25)
             if self.stromspeicher < 0:
                 needed_energy += (-1 * self.stromspeicher)
             else:
                 needed_energy = needed_energy - self.stromspeicher
-            print('Needed Energy: ', needed_energy)
             gas = self.gasKraftwerk.use_gas(needed_energy)
             self.stromspeicher += gas['energy']
             self.payload['GasEnergy'] = gas
@@ -259,8 +256,6 @@ class CentralPy:
 
     def day_loop(self):
         while True:
-            print('Krankenhaus:', self.waiting_krankenhaus)
-            print('Wohnblock:', self.waiting_wohnblock)
             while self.waiting_wohnblock or self.waiting_krankenhaus:
                 continue
 
@@ -329,9 +324,11 @@ class CentralPy:
             else:
                 self.setBatteryLEDStatus()
 
-            if not self.usedGas and not self.convertedGas:
+            if (not self.usedGas) and (not self.convertedGas):
                 self.payload['GasEnergy'] = self.gasKraftwerk.getData()
 
+
+            #print(self.payload)
             self.sendDataToServer()
             if self.LOCAL_TEST:
                 print('Not saving Data')

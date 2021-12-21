@@ -69,10 +69,6 @@ let loop = async () => {
     res = await res.json();
     if(res === null) return;
     res = res.data;
-    console.log('Central: ' + res.central.energy_production_average);
-    console.log('Wohnblock: ' + res.wohnblock.energy_production_average);
-    console.log('Krankenhaus: ' + res.krankenhaus.energy_production_average);
-    console.log(res.GasEnergy);
 
 
     updateSpeicher(stromspeicher_chart, res.time, res.general);

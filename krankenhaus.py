@@ -113,13 +113,8 @@ class Krankenhaus:
             energy = self.calc_power()
 
             self.energy_production_average = (self.energy_production_average + (solarPowerInfo['Effizienz'] * energy)) / self.loop_counter
-            print('Production: ', self.energy_production_average, ' + ',
-                  (solarPowerInfo['Effizienz'] * energy), ' / ', self.loop_counter)
-            print('Average: ', self.energy_production_average)
             self.energy_usage_average = (self.energy_usage_average + power_needed['poweruse_kwatt']) / self.loop_counter
             self.energy_netto_average = (self.energy_netto_average + ((solarPowerInfo['Effizienz'] * energy) - power_needed['poweruse_kwatt'])) / self.loop_counter
-
-            print('Netto: ', self.energy_netto_average, ' + ', ((solarPowerInfo['Effizienz'] * energy) - power_needed['poweruse_kwatt']), ' / ', self.loop_counter)
 
             payload = self.setUpPayload(solarPowerInfo, power_needed['poweruse_kwatt'], energy)
             # print(payload)
@@ -169,7 +164,6 @@ class Krankenhaus:
 
         poweruse_kwatt = poweruse * self.usage_actual
 
-        print(poweruse_kwatt)
         return {
             'poweruse_kwatt': poweruse_kwatt,
             'potentiometer_efficiency': (potentiometer_value / potentiometer_default)

@@ -70,14 +70,10 @@ class Helper:
         self.last_weather = wettervar
         self.hours_since_weather_change += 1
 
-        print('Effizienz: ', effizienz)
         return {
             'Wetter': wettervar,
             'Effizienz': effizienz
         }
-
-    def calculateKohleEnergy(self):
-        print('FUCK')
 
     def useEnergy(self, sensor_values: list) -> dict:
         sum = 0
